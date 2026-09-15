@@ -8,7 +8,8 @@
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#17202a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
 .app{max-width:650px;margin:auto;min-height:100vh;background:#fff;padding:22px 16px 30px}
-h1{text-align:center;margin:6px 0 3px;font-size:30px}.updated{text-align:center;color:#6b7280;font-size:14px;margin-bottom:20px}
+h1{text-align:center;margin:6px 0 3px;font-size:30px}.updated{text-align:center;color:#6b7280;font-size:14px;margin-bottom:14px}
+.sorts{display:flex;gap:8px;margin:0 0 14px}.sorts button{flex:1;padding:11px 8px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;font-size:15px;font-weight:700}.sorts button.active{background:#0f766e;color:#fff;border-color:#0f766e}
 .status{text-align:center;color:#92400e;padding:14px;background:#fffbeb;border-radius:12px;margin-bottom:14px}
 .card{padding:15px 16px;margin:10px 0;border-radius:13px;background:#f8fafc;border:1px solid #e5e7eb}
 .name{font-size:20px;font-weight:800;margin-bottom:5px}.date{font-weight:700;margin-bottom:5px}.notes{color:#4b5563;line-height:1.45}
@@ -19,6 +20,7 @@ h1{text-align:center;margin:6px 0 3px;font-size:30px}.updated{text-align:center;
 <div class="app">
 <h1>Arrivals to Mazatlán</h1>
 <div id="updated" class="updated">Last Updated: Loading...</div>
+<div class="sorts"><button id="sortDate" class="active" type="button" onclick="setSort('date')">Sort by Date</button><button id="sortName" type="button" onclick="setSort('name')">Sort by Name</button></div>
 <div id="status" class="status">Loading arrivals...</div>
 <div id="list"></div>
 <button class="refresh" onclick="loadCSV()">↻ Refresh</button>
@@ -28,7 +30,11 @@ function parseCSV(t){let a=[],r=[],c="",q=false;for(let i=0;i<t.length;i++){let 
 function pd(s){s=(s||"").trim();let d=new Date(s);if(!isNaN(d))return d;let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let y=+m[3];if(y<100)y+=2000;return new Date(y,+m[1]-1,+m[2])}return new Date(8640000000000000)}
 function fd(s){let d=pd(s);return d.getTime()===8640000000000000?s||"":d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-async function loadCSV(){let st=document.getElementById("status");try{let r=await fetch("Arrivals_To_Maz.csv?v="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error();let rows=parseCSV(await r.text());if(rows.length<2)throw Error();let d=rows.slice(1).map(x=>({name:(x[5]||"").trim(),date:(x[6]||"").trim(),notes:(x[7]||"").trim()})).filter(x=>x.name||x.date||x.notes);d.sort((a,b)=>pd(a.date)-pd(b.date));document.getElementById("list").innerHTML=d.length?d.map(x=>'<div class="card"><div class="name">'+esc(x.name)+'</div><div class="date">Arrival: '+esc(fd(x.date))+'</div>'+(x.notes?'<div class="notes">'+esc(x.notes)+'</div>':'')+'</div>').join(""):'<div class="empty">No arrivals found.</div>';st.style.display="none";document.getElementById("updated").textContent="Last Updated: "+new Date().toLocaleString()}catch(e){st.textContent="Could not load Arrivals_To_Maz.csv.";st.style.display="block";document.getElementById("updated").textContent="Last Updated: Unable to load"}}
+let arrivals=[];let sortMode="date";
+function lastName(s){let parts=String(s||"").trim().split(/\s+/).filter(Boolean);return parts.length?parts[parts.length-1].replace(/^[^A-Za-zÀ-ÖØ-öø-ÿ'’-]+|[^A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/g,""):""}
+function render(){let d=[...arrivals];if(sortMode==="name"){d.sort((a,b)=>{let c=lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"});return c||a.name.localeCompare(b.name,undefined,{sensitivity:"base"})})}else{d.sort((a,b)=>pd(a.date)-pd(b.date)||lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"}))}document.getElementById("list").innerHTML=d.length?d.map(x=>'<div class="card"><div class="name">'+esc(x.name)+'</div><div class="date">Arrival: '+esc(fd(x.date))+'</div>'+(x.notes?'<div class="notes">'+esc(x.notes)+'</div>':'')+'</div>').join(""):"<div class="empty">No arrivals found.</div>"}
+function setSort(mode){sortMode=mode;document.getElementById("sortDate").classList.toggle("active",mode==="date");document.getElementById("sortName").classList.toggle("active",mode==="name");render()}
+async function loadCSV(){let st=document.getElementById("status");try{let r=await fetch("Arrivals_To_Maz.csv?v="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error();let rows=parseCSV(await r.text());if(rows.length<2)throw Error();arrivals=rows.slice(1).map(x=>({name:(x[5]||"").trim(),date:(x[6]||"").trim(),notes:(x[7]||"").trim()})).filter(x=>x.name||x.date||x.notes);render();st.style.display="none";document.getElementById("updated").textContent="Last Updated: "+new Date().toLocaleString()}catch(e){st.textContent="Could not load Arrivals_To_Maz.csv.";st.style.display="block";document.getElementById("updated").textContent="Last Updated: Unable to load"}}
 loadCSV();
 </script>
 </body></html>
