@@ -19,7 +19,7 @@ h1{text-align:center;margin:6px 0 3px;font-size:30px}.updated{text-align:center;
 <body>
 <div class="app">
 <h1>Arrivals to Mazatlán</h1>
-<div id="updated" class="updated">Last Updated: Loading...</div>
+<div id="updated" class="updated">Last Updated: —</div>
 <div class="sorts"><button id="sortDate" class="active" type="button" onclick="setSort('date')">Sort by Date</button><button id="sortName" type="button" onclick="setSort('name')">Sort by Name</button></div>
 <div id="status" class="status">Loading arrivals...</div>
 <div id="list"></div>
@@ -27,14 +27,46 @@ h1{text-align:center;margin:6px 0 3px;font-size:30px}.updated{text-align:center;
 </div>
 <script>
 function parseCSV(t){let a=[],r=[],c="",q=false;for(let i=0;i<t.length;i++){let x=t[i],n=t[i+1];if(x=='"'){if(q&&n=='"'){c+='"';i++}else q=!q}else if(x==','&&!q){r.push(c);c=""}else if((x=='\n'||x=='\r')&&!q){if(x=='\r'&&n=='\n')i++;r.push(c);if(r.some(v=>v.trim()))a.push(r);r=[];c=""}else c+=x}if(c||r.length){r.push(c);a.push(r)}return a}
-function pd(s){s=(s||"").trim();let d=new Date(s);if(!isNaN(d))return d;let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let y=+m[3];if(y<100)y+=2000;return new Date(y,+m[1]-1,+m[2])}return new Date(8640000000000000)}
-function fd(s){let d=pd(s);return d.getTime()===8640000000000000?s||"":d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})}
+function pd(s){s=(s||"").trim();let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let y=+m[3];if(y<100)y+=2000;return new Date(Date.UTC(y,+m[1]-1,+m[2]))}let d=new Date(s);return isNaN(d)?new Date(8640000000000000):d}
+function fd(s){let d=pd(s);return d.getTime()===8640000000000000?s||"":d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric",timeZone:"UTC"})}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-let arrivals=[];let sortMode="date";
+let arrivals=[],sortMode="date";
 function lastName(s){let parts=String(s||"").trim().split(/\s+/).filter(Boolean);return parts.length?parts[parts.length-1].replace(/^[^A-Za-zÀ-ÖØ-öø-ÿ'’-]+|[^A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/g,""):""}
-function render(){let d=[...arrivals];if(sortMode==="name"){d.sort((a,b)=>{let c=lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"});return c||a.name.localeCompare(b.name,undefined,{sensitivity:"base"})})}else{d.sort((a,b)=>pd(a.date)-pd(b.date)||lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"}))}document.getElementById("list").innerHTML=d.length?d.map(x=>'<div class="card"><div class="name">'+esc(x.name)+'</div><div class="date">Arrival: '+esc(fd(x.date))+'</div>'+(x.notes?'<div class="notes">'+esc(x.notes)+'</div>':'')+'</div>').join(""):"<div class="empty">No arrivals found.</div>"}
+function render(){
+  let d=[...arrivals];
+  if(sortMode==="name"){
+    d.sort((a,b)=>lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"})||a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+  }else{
+    d.sort((a,b)=>pd(a.date)-pd(b.date)||lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"}));
+  }
+  document.getElementById("list").innerHTML=d.length?d.map(x=>'<div class="card"><div class="name">'+esc(x.name)+'</div><div class="date">Arrival: '+esc(fd(x.date))+'</div>'+(x.notes?'<div class="notes">'+esc(x.notes)+'</div>':'')+'</div>').join(""):"<div class=\"empty\">No arrivals found.</div>";
+}
 function setSort(mode){sortMode=mode;document.getElementById("sortDate").classList.toggle("active",mode==="date");document.getElementById("sortName").classList.toggle("active",mode==="name");render()}
-async function loadCSV(){let st=document.getElementById("status");try{let r=await fetch("Arrivals_To_Maz.csv?v="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error();let rows=parseCSV(await r.text());if(rows.length<2)throw Error();arrivals=rows.slice(1).map(x=>({name:(x[5]||"").trim(),date:(x[6]||"").trim(),notes:(x[7]||"").trim()})).filter(x=>x.name||x.date||x.notes);render();st.style.display="none";document.getElementById("updated").textContent="Last Updated: "+new Date().toLocaleString()}catch(e){st.textContent="Could not load Arrivals_To_Maz.csv.";st.style.display="block";document.getElementById("updated").textContent="Last Updated: Unable to load"}}
+function showRows(text){
+  let rows=parseCSV(text);
+  if(rows.length<2) throw Error("No data rows");
+  arrivals=rows.slice(1).map(x=>({name:(x[5]||"").trim(),date:(x[6]||"").trim(),notes:(x[7]||"").trim()})).filter(x=>x.name||x.date||x.notes);
+  render();
+}
+async function loadCSV(){
+  let st=document.getElementById("status");
+  st.textContent="Loading arrivals...";
+  st.style.display="block";
+  document.getElementById("updated").textContent="Last Updated: "+new Date().toLocaleString();
+  try{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),8000);
+    const r=await fetch("Arrivals_To_Maz.csv?v="+Date.now(),{cache:"no-store",signal:controller.signal});
+    clearTimeout(timer);
+    if(!r.ok) throw Error("HTTP "+r.status);
+    showRows(await r.text());
+    st.style.display="none";
+  }catch(e){
+    st.textContent="Could not load Arrivals_To_Maz.csv. Make sure the CSV is in the same GitHub folder as index.html.";
+    st.style.display="block";
+    document.getElementById("list").innerHTML="";
+  }
+}
 loadCSV();
 </script>
 </body></html>
