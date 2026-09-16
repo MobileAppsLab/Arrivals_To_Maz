@@ -1,1 +1,30 @@
+name: Test Microsoft Forms workbook
 
+on:
+  workflow_dispatch:
+
+jobs:
+  test-download:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download OneDrive workbook
+        run: |
+          curl -L \
+            -A "Mozilla/5.0" \
+            -o arrivals.xlsx \
+            "https://1drv.ms/x/c/04741995b893e7fa/IQSQuYbUiyc6Rbul2e12HcWqARPkHaswgONOpb1XXjyi02E?e=NMO7dq"
+
+      - name: Check downloaded file
+        run: |
+          file arrivals.xlsx
+          ls -lh arrivals.xlsx
+
+      - name: Check Excel ZIP signature
+        run: |
+          if unzip -t arrivals.xlsx >/dev/null 2>&1; then
+            echo "SUCCESS: OneDrive returned a valid Excel workbook."
+          else
+            echo "ERROR: The downloaded file is not a valid Excel workbook."
+            exit 1
+          fi
