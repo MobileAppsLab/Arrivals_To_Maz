@@ -45,14 +45,19 @@ function setSort(mode){sortMode=mode;document.getElementById("sortDate").classLi
 function showRows(text){
   let rows=parseCSV(text);
   if(rows.length<2) throw Error("No data rows");
-  arrivals=rows.slice(1).map(x=>({name:(x[5]||"").trim(),date:(x[6]||"").trim(),notes:(x[7]||"").trim()})).filter(x=>x.name||x.date||x.notes);
+  let dataRows=rows.slice(1);
+  arrivals=dataRows.map(x=>({name:(x[5]||"").trim(),date:(x[6]||"").trim(),notes:(x[7]||"").trim()})).filter(x=>x.name||x.date||x.notes);
+  
+  let lastRow = dataRows[dataRows.length - 1];
+  let lastTimestamp = (lastRow && lastRow[1]) ? lastRow[1].trim() : "—";
+  document.getElementById("updated").textContent = "Last Updated: " + lastTimestamp;
+  
   render();
 }
 async function loadCSV(){
   let st=document.getElementById("status");
   st.textContent="Loading arrivals...";
   st.style.display="block";
-  document.getElementById("updated").textContent="Last Updated: "+new Date().toLocaleString();
   try{
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),8000);
@@ -64,9 +69,11 @@ async function loadCSV(){
   }catch(e){
     st.textContent="Could not load Arrivals_To_Maz.csv. Make sure the CSV is in the same GitHub folder as index.html.";
     st.style.display="block";
+    document.getElementById("updated").textContent="Last Updated: —";
     document.getElementById("list").innerHTML="";
   }
 }
 loadCSV();
 </script>
-</body></html>
+</body>
+</html>ml>
