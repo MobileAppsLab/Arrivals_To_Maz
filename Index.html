@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Arrivals to Mazatlán</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#17202a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+.app{max-width:650px;margin:auto;min-height:100vh;background:#fff;padding:22px 16px 30px}
+h1{text-align:center;margin:6px 0 3px;font-size:30px}.updated{text-align:center;color:#6b7280;font-size:14px;margin-bottom:14px}
+.sorts{display:flex;gap:8px;margin:0 0 14px}.sorts button{flex:1;padding:11px 8px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;font-size:15px;font-weight:700}.sorts button.active{background:#0f766e;color:#fff;border-color:#0f766e}
+.status{text-align:center;color:#92400e;padding:14px;background:#fffbeb;border-radius:12px;margin-bottom:14px}
+.card{padding:15px 16px;margin:10px 0;border-radius:13px;background:#f8fafc;border:1px solid #e5e7eb}
+.name{font-size:20px;font-weight:800;margin-bottom:5px}.date{font-weight:700;margin-bottom:5px}.notes{color:#4b5563;line-height:1.45}
+.empty{text-align:center;color:#6b7280;padding:35px 10px}.refresh{width:100%;padding:13px;margin-top:12px;border:0;border-radius:11px;background:#0f766e;color:white;font-size:17px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>Arrivals to Mazatlán</h1>
+<div id="updated" class="updated">Last Updated: —</div>
+<div class="sorts"><button id="sortDate" class="active" type="button" onclick="setSort('date')">Sort by Date</button><button id="sortName" type="button" onclick="setSort('name')">Sort by Name</button></div>
+<div id="status" class="status">Loading arrivals...</div>
+<div id="list"></div>
+<button class="refresh" onclick="loadCSV()">↻ Refresh</button>
+</div>
+<script>
+function parseCSV(t){let a=[],r=[],c="",q=false;for(let i=0;i<t.length;i++){let x=t[i],n=t[i+1];if(x=='"'){if(q&&n=='"'){c+='"';i++}else q=!q}else if(x==','&&!q){r.push(c);c=""}else if((x=='\n'||x=='\r')&&!q){if(x=='\r'&&n=='\n')i++;r.push(c);if(r.some(v=>v.trim()))a.push(r);r=[];c=""}else c+=x}if(c||r.length){r.push(c);a.push(r)}return a}
+function pd(s){s=(s||"").trim();let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(m){let y=+m[3];if(y<100)y+=2000;return new Date(Date.UTC(y,+m[1]-1,+m[2]))}let d=new Date(s);return isNaN(d)?new Date(8640000000000000):d}
+function fd(s){let d=pd(s);return d.getTime()===8640000000000000?s||"":d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric",timeZone:"UTC"})}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+let arrivals=[],sortMode="date";
+function lastName(s){let parts=String(s||"").trim().split(/\s+/).filter(Boolean);return parts.length?parts[parts.length-1].replace(/^[^A-Za-zÀ-ÖØ-öø-ÿ'’-]+|[^A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/g,""):""}
+function render(){
+  let d=[...arrivals];
+  if(sortMode==="name"){
+    d.sort((a,b)=>lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"})||a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+  }else{
+    d.sort((a,b)=>pd(a.date)-pd(b.date)||lastName(a.name).localeCompare(lastName(b.name),undefined,{sensitivity:"base"}));
+  }
+  document.getElementById("list").innerHTML=d.length?d.map(x=>'<div class="card"><div class="name">'+esc(x.name)+'</div><div class="date">Arrival: '+esc(fd(x.date))+'</div>'+(x.notes?'<div class="notes">'+esc(x.notes)+'</div>':'')+'</div>').join(""):"<div class=\"empty\">No arrivals found.</div>";
+}
+function setSort(mode){sortMode=mode;document.getElementById("sortDate").classList.toggle("active",mode==="date");document.getElementById("sortName").classList.toggle("active",mode==="name");render()}
+function submissionDateOnly(s){
+  s=String(s||"").trim();
+  if(!s) return "";
+  let d=new Date(s);
+  if(isNaN(d)){
+    let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if(m){let y=+m[3];if(y<100)y+=2000;d=new Date(Date.UTC(y,+m[1]-1,+m[2]));}
+  }
+  return isNaN(d)?s:d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
+}
+function showRows(text){
+  let rows=parseCSV(text);
+  if(rows.length<2) throw Error("No data rows");
+  let dataRows=rows.slice(1).filter(x=>x.some(v=>String(v||"").trim()));
+  let lastRow=dataRows[dataRows.length-1]||[];
+  document.getElementById("updated").textContent="Last Updated: "+(submissionDateOnly(lastRow[1])||"—");
+  arrivals=dataRows.map(x=>({name:(x[5]||"").trim(),date:(x[6]||"").trim(),notes:(x[7]||"").trim()})).filter(x=>x.name||x.date||x.notes);
+  render();
+}
+async function loadCSV(){
+  let st=document.getElementById("status");
+  st.textContent="Loading arrivals...";
+  st.style.display="block";
+  document.getElementById("updated").textContent="Last Updated: "+new Date().toLocaleString();
+  try{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),8000);
+    const r=await fetch("Arrivals_To_Maz.csv?v="+Date.now(),{cache:"no-store",signal:controller.signal});
+    clearTimeout(timer);
+    if(!r.ok) throw Error("HTTP "+r.status);
+    showRows(await r.text());
+    st.style.display="none";
+  }catch(e){
+    st.textContent="Could not load Arrivals_To_Maz.csv. Make sure the CSV is in the same GitHub folder as index.html.";
+    st.style.display="block";
+    document.getElementById("list").innerHTML="";
+  }
+}
+loadCSV();
+</script>
+</body></html>
